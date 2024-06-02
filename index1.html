@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>simpleMap</title>
+<script src="https://apis.openapi.sk.com/tmap/vectorjs?version=1&appKey=1pIKjpSqWR9uk7EbMoHLA97vnF6SBI17yPeAXVY9"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+<script type="text/javascript">
+	var map;
+	var userPosition;
+	var markers = [];
+
+	// 페이지가 로딩이 된 후 호출하는 함수입니다.
+	function initTmap(){
+		// map 생성
+		map = new Tmapv3.Map("map_div", {
+			width : "100%",	// 지도의 넓이
+			height : "700px",	// 지도의 높이
+			zoom : 16	// 지도 줌레벨
+		});
+		fetch('https://jjy13245.github.io/location.xlsx')
+    		.then(response => response.arrayBuffer())
+    		.then(data => {
+        		var workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
+        		var sheetName = workbook.SheetNames[0];
+        		var sheet = workbook.Sheets[sheetName];
+        		var json = XLSX.utils.sheet_to_json(sheet);
+
+        		// JSON 데이터를 처리합니다.
+        		console.log(json);
+		});
+
+
+		if (navigator.geolocation) {
+			navigator.geolocation.getCurrentPosition(function(position) {
+				var lat = position.coords.latitude;
+				var lng = position.coords.longitude;
+				userPosition = new Tmapv3.LatLng(lat, lng);
+				map.setCenter(userPosition);
+
+				// 내 위치 마커 생성
+				var marker = new Tmapv3.Marker({
+					position: userPosition,
+					map: map,
+					title: "내 위치"
+				});
+				var label = new Tmapv3.Label({
+					map: map,
+					position: userPosition,
+					content: "내 위치",
+					offset: new Tmapv3.Point(0, -100) // 라벨 위치 조정
+				});
+
+				// 버튼을 지도 위에 추가
+				var mapWrapper = document.getElementById('map_wrapper');
+				var createMarkerBtn = document.createElement('button');
+				createMarkerBtn.textContent = '방범벨';
+				createMarkerBtn.style.position = 'absolute';
+				createMarkerBtn.style.bottom = '10px';
+				createMarkerBtn.style.left = '10px';
+				createMarkerBtn.style.padding = '10px 20px';
+				createMarkerBtn.style.backgroundColor = '#007BFF';
+				createMarkerBtn.style.color = 'white';
+				createMarkerBtn.style.border = 'none';
+				createMarkerBtn.style.cursor = 'pointer';
+				createMarkerBtn.style.borderRadius = '5px';
+				createMarkerBtn.addEventListener('click', toggleMarkers);
+				mapWrapper.appendChild(createMarkerBtn);
+			}, function(error) {
+				console.error('Error getting geolocation:', error);
+			});
+		} else {
+			console.error('Geolocation is not supported by this browser.');
+		}
+	}
+	function toggleMarkers() {
+		if (markers.length === 0) {
+			createMarkers();
+		} else {
+			clearMarkers();
+		}
+	}
+
+	function createMarkers() {
+		var url = "location.xlsx";
+		var request = new XMLHttpRequest();
+		request.open("GET", url, true);
+		request.responseType = "arraybuffer";
+
+		request.onload = function(e) {
+			if (request.status === 200) {
+				var data = new Uint8Array(request.response);
+				var workbook = XLSX.read(data, { type: 'array' });
+				var sheetName = workbook.SheetNames[0];
+				var sheet = workbook.Sheets[sheetName];
+				var json = XLSX.utils.sheet_to_json(sheet);
+
+				json.forEach(function (location) {
+					var name = location.name;
+					var x = parseFloat(location['WGS84위도']);
+					var y = parseFloat(location['WGS84경도']);
+					var markerPosition = new Tmapv3.LatLng(x, y);
+					var distance = getDistance(userPosition, markerPosition);
+
+					if (distance <= 200) {
+						var marker = new Tmapv3.Marker({
+							position: markerPosition,
+							map: map,
+							title: name
+						});
+						markers.push(marker);
+					}
+				});
+			}
+		};
+		request.send();
+	}
+
+	function clearMarkers() {
+		markers.forEach(function(marker) {
+			marker.setMap(null);
+		})
+		markers = [];
+	}
+
+	function getDistance(latlng1, latlng2) {
+		var R = 6371e3; // 지구의 반지름 (미터)
+		var φ1 = latlng1.lat() * Math.PI / 180; // 위도1
+		var φ2 = latlng2.lat() * Math.PI / 180; // 위도2
+		var Δφ = (latlng2.lat() - latlng1.lat()) * Math.PI / 180; // 위도의 차
+		var Δλ = (latlng2.lng() - latlng1.lng()) * Math.PI / 180; // 경도의 차
+
+		var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+				Math.cos(φ1) * Math.cos(φ2) *
+				Math.sin(Δλ/2) * Math.sin(Δλ/2);
+		var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+		var d = R * c; // 거리 (미터)
+		return d;
+	}
+</script>
+</head>
+<body onload="initTmap()"><!-- 맵 생성 실행 -->
+	<div id="map_wrapper" style="position:relative;">
+		<div id="map_div" style="width:100%; height:700px;"></div>
+	</div>
+</body>
+</html>
